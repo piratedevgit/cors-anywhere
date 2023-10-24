@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"fmt"
 
 	"golang.org/x/time/rate"
 )
@@ -21,7 +22,7 @@ func main() {
 	// Listen on a specific host and port
 	host := os.Getenv("HOST")
 	if host == "" {
-		host = "0.0.0.0"
+		host = "127.0.0.1"
 	}
 
 	portStr := os.Getenv("PORT")
@@ -69,6 +70,7 @@ func parseEnvList(env string) []string {
 }
 
 func handleProxyRequest(w http.ResponseWriter, r *http.Request) {
+	fmt.Println(r.URL.Query().Get("url"));
 	// Limit the rate of incoming requests
 	if !limiter.Allow() {
 		http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
@@ -78,8 +80,24 @@ func handleProxyRequest(w http.ResponseWriter, r *http.Request) {
 	// Modify the request headers and handle CORS
 	modifyRequestHeaders(r)
 
-	// Create a forward request to the original target URL
-	resp, err := http.DefaultClient.Do(r)
+	// Get the target URL from the request query parameters
+	targetURL := r.URL.Query().Get("url")
+
+	// Validate the target URL if necessary
+
+	// Create a new request to the targetURL
+	targetReq, err := http.NewRequest(r.Method, targetURL, r.Body)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Copy the request headers
+	copyRequestHeaders(targetReq, r)
+
+	// Send the request to the target URL
+	resp, err := http.DefaultClient.Do(targetReq)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -100,6 +118,16 @@ func modifyRequestHeaders(r *http.Request) {
 	// Modify the request headers as needed
 	r.Header.Set("origin", r.Header.Get("Origin"))
 	r.Header.Set("x-requested-with", r.Header.Get("X-Requested-With"))
+}
+
+
+func copyRequestHeaders(dst *http.Request, src *http.Request) {
+	// Copy the request headers to the target request
+	for header, values := range src.Header {
+		for _, value := range values {
+			dst.Header.Add(header, value)
+		}
+	}
 }
 
 func copyResponseHeaders(w http.ResponseWriter, resp *http.Response) {
