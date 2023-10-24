@@ -70,7 +70,6 @@ func parseEnvList(env string) []string {
 }
 
 func handleProxyRequest(w http.ResponseWriter, r *http.Request) {
-	fmt.Println(r.URL.Query().Get("url"));
 	// Limit the rate of incoming requests
 	if !limiter.Allow() {
 		http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
@@ -83,11 +82,8 @@ func handleProxyRequest(w http.ResponseWriter, r *http.Request) {
 	// Get the target URL from the request query parameters
 	targetURL := r.URL.Query().Get("url")
 
-	// Validate the target URL if necessary
-
 	// Create a new request to the targetURL
-	targetReq, err := http.NewRequest(r.Method, targetURL, r.Body)
-
+	targetReq, err := http.NewRequest(r.Method, targetURL, nil)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -107,7 +103,8 @@ func handleProxyRequest(w http.ResponseWriter, r *http.Request) {
 	// Copy the response headers
 	copyResponseHeaders(w, resp)
 
-	// Copy the response body
+	// Stream the response body directly
+	w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
 	_, err = io.Copy(w, resp.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
